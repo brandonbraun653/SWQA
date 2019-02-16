@@ -31,17 +31,21 @@ class ClangFormatConfig:
         with open(config_file) as f:
             self._raw_config = json.load(f)
 
-    def build_file_command(self, file):
+    def build_file_command(self, file, working_dir):
         """
         Generates command line options for running clang-format on a single file
 
         :param file: The file to execute formatting on
         :type file: str
 
+        :param working_dir: Directory that file is relative to
+        :type working_dir: str
+
         :return: Formatted command
         :rtype: str
         """
-        return ' '.join([self.inplace, self.style, file])
+        path = os.path.realpath(os.path.join(working_dir, file))
+        return ' '.join([self.inplace, self.style, path])
 
     def build_directory_command(self, dir_obj, working_dir):
         """
@@ -62,12 +66,19 @@ class ClangFormatConfig:
         :return: Formatted command
         :rtype: str
         """
-        path = os.path.join(working_dir, dir_obj['path'])
+        path = os.path.realpath(os.path.join(working_dir, dir_obj['path']))
 
         # Grab every file under the path that matches the specified extension.
         files = []
         for ext in dir_obj['extensions']:
-            files.extend(glob.glob(os.path.join(path, ext), recursive=dir_obj['recursive']))
+            recurse = dir_obj['recursive']
+
+            if recurse:
+                search_start = os.path.join(path, '**', ext)
+            else:
+                search_start = os.path.join(path, ext)
+
+            files.extend(glob.glob(search_start, recursive=recurse))
 
         files = ' '.join(files)
         return ' '.join([self.inplace, self.style, files])
@@ -110,6 +121,7 @@ class ClangFormatter:
         """
         self.config = ClangFormatConfig(config_file=project_file)
         self.working_dir = working_dir
+        self.project_file_dir = os.path.dirname(project_file)
         self.clang_format_exe = clang_format_exe
 
     @staticmethod
@@ -126,7 +138,6 @@ class ClangFormatter:
         :return: Output of the process
         :rtype: int, str, str
         """
-        print(command)
         actual_working_dir = os.getcwd() if working_dir is None else working_dir
         process = Popen(command, stdout=PIPE, stderr=PIPE, cwd=actual_working_dir, shell=True)
 
@@ -142,10 +153,11 @@ class ClangFormatter:
         :return: Process return code
         :rtype: int
         """
-        template = '{} {}'
+        template = '{} -verbose {}'
 
         for file in self.config.files:
-            command = template.format(self.clang_format_exe, self.config.build_file_command(file))
+            command = template.format(self.clang_format_exe,
+                                      self.config.build_file_command(file, working_dir=self.project_file_dir))
             return_code, stdout, stderr = self._execute_shell_cmd(command, working_dir=self.working_dir)
 
             if stderr:
@@ -153,7 +165,7 @@ class ClangFormatter:
                 return return_code
 
         for directory in self.config.directories:
-            files = self.config.build_directory_command(dir_obj=directory, working_dir=self.working_dir)
+            files = self.config.build_directory_command(dir_obj=directory, working_dir=self.project_file_dir)
             command = template.format(self.clang_format_exe, files)
             return_code, stdout, stderr = self._execute_shell_cmd(command, working_dir=self.working_dir)
 
@@ -162,3 +174,10 @@ class ClangFormatter:
                 return return_code
 
         return 0
+
+
+    #{
+    #  "path": "../Chimera",
+    #  "recursive": true,
+    #  "extensions": ["*.hpp", "*.cpp"]
+    #}
