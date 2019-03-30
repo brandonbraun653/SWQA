@@ -96,7 +96,9 @@ class CppCheckConfig:
                     f.write('// {}\n'.format(item['comment']))
                     f.write(output_string + '\n\n')
 
-        return os.path.relpath(act_out_file, os.path.commonprefix([os.getcwd(), act_out_file]))
+            act_out_file = os.path.relpath(act_out_file, os.path.commonprefix([os.getcwd(), act_out_file]))
+
+        return act_out_file
 
     @property
     def cpp_working_dir(self):
@@ -285,8 +287,12 @@ class CppCheck:
         """
         self._cppcheck_exe = exe_path
         self._version = 'unknown'
-
         self.configurations = {}  # type: Dict[str, CppCheckConfig]
+
+        if not os.path.isfile(exe_path):
+            github = "https://github.com/danmar/cppcheck"
+            raise RuntimeError("Could not find cppcheck.exe at [{}]. Please build on your system as described [{}] "
+                               "and update your script with the new location.".format(exe_path, github))
 
     @staticmethod
     def _execute_shell_cmd(command, working_dir=None):
@@ -378,9 +384,18 @@ class CppCheck:
         :rtype: int
         """
         return_code = 0
+        execution_list = []
 
-        if config in self.configurations.keys():
-            cfg = self.configurations[config]
+        if config == "all":
+            execution_list = self.configurations
+        elif config in self.configurations.keys():
+            execution_list.append(self.configurations[config])
+        else:
+            print("No matching configurations")
+            return_code = -1
+
+        for cfg_key in execution_list.keys():
+            cfg = execution_list[cfg_key]
             cfg.cpp_working_dir = working_dir
             command = cfg.build_command()
 

@@ -104,7 +104,7 @@ class ClangFormatConfig:
 
 
 class ClangFormatter:
-    """ """
+    """ Runs clang-format on a project """
 
     def __init__(self, project_file, working_dir, clang_format_exe=None):
         """
@@ -174,10 +174,3 @@ class ClangFormatter:
                 return return_code
 
         return 0
-
-
-    #{
-    #  "path": "../Chimera",
-    #  "recursive": true,
-    #  "extensions": ["*.hpp", "*.cpp"]
-    #}
